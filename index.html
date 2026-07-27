@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This or That Live (With Names, Reset & QR Code)</title>
+    <title>This or That Live</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase App & Realtime Database SDKs -->
@@ -79,10 +79,20 @@
         </div>
     </div>
 
-    <!-- Separate config file import to prevent overwriting credentials on update -->
+    <!-- Separate config file import -->
     <script src="config.js"></script>
 
     <script>
+        // -------------------------------------------------------------------
+        // 1. APPLICATION STATE & INITIALIZATION
+        // -------------------------------------------------------------------
+        var isModerator = false;
+        var userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        var userName = '';
+        var activeQuestionIndex = 0;
+        var isRevealed = false;
+        var currentVotes = {};
+
         // Initialize Firebase using the external config.js file
         if (typeof firebaseConfig !== 'undefined') {
             firebase.initializeApp(firebaseConfig);
@@ -92,7 +102,7 @@
         const db = firebase.database();
 
         // -------------------------------------------------------------------
-        // QUESTION LIST
+        // 2. QUESTION LIST
         // -------------------------------------------------------------------
         const QUESTIONS = [
             { "a": "Movies", "b": "Tv Shows" },
@@ -121,17 +131,7 @@
         ];
 
         // -------------------------------------------------------------------
-        // APPLICATION STATE
-        // -------------------------------------------------------------------
-        let isModerator = false;
-        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
-        let userName = '';
-        let activeQuestionIndex = 0;
-        let isRevealed = false;
-        let currentVotes = {};
-
-        // -------------------------------------------------------------------
-        // SETUP FLOWS
+        // 3. SETUP FLOWS
         // -------------------------------------------------------------------
         function initModerator() {
             isModerator = true;
@@ -164,7 +164,7 @@
         }
 
         // -------------------------------------------------------------------
-        // QR CODE GENERATOR
+        // 4. QR CODE GENERATOR
         // -------------------------------------------------------------------
         function generateQRCode() {
             const qrContainer = document.getElementById("qrcode");
@@ -186,7 +186,7 @@
         }
 
         // -------------------------------------------------------------------
-        // REALTIME LISTENERS
+        // 5. REALTIME LISTENERS
         // -------------------------------------------------------------------
         function listenToGameState() {
             db.ref('gameState').on('value', (snapshot) => {
@@ -210,7 +210,7 @@
         }
 
         // -------------------------------------------------------------------
-        // UI RENDER LOGIC
+        // 6. UI RENDER LOGIC
         // -------------------------------------------------------------------
         function renderUI() {
             const q = QUESTIONS[activeQuestionIndex];
@@ -294,7 +294,7 @@
         }
 
         // -------------------------------------------------------------------
-        // USER ACTIONS
+        // 7. USER ACTIONS
         // -------------------------------------------------------------------
         function castVote(option) {
             if (isRevealed) return;
