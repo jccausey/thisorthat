@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This or That Live (With Names)</title>
+    <title>This or That Live (With Names & Reset)</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase App & Realtime Database SDKs -->
@@ -56,10 +56,16 @@
         </div>
 
         <!-- Moderator Controls (Only visible to Moderator) -->
-        <div id="mod-controls" class="hidden border-t border-slate-700 pt-6 mt-6 flex justify-between gap-4">
-            <button id="prev-btn" onclick="changeQuestion(-1)" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold">Previous</button>
-            <button id="reveal-btn" onclick="toggleReveal()" class="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-lg">Reveal Results</button>
-            <button id="next-btn" onclick="changeQuestion(1)" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold">Next</button>
+        <div id="mod-controls" class="hidden border-t border-slate-700 pt-6 mt-6 space-y-3">
+            <div class="flex justify-between gap-4">
+                <button id="prev-btn" onclick="changeQuestion(-1)" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold">Previous</button>
+                <button id="reveal-btn" onclick="toggleReveal()" class="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-lg">Reveal Results</button>
+                <button id="next-btn" onclick="changeQuestion(1)" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold">Next</button>
+            </div>
+            <!-- Reset Button -->
+            <button onclick="resetGame()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition text-sm">
+                Reset Game (Clear All Votes)
+            </button>
         </div>
     </div>
 
@@ -85,99 +91,30 @@
         // 2. QUESTION LIST
         // -------------------------------------------------------------------
         const QUESTIONS = [
-            {
-                        "a": "Movies",
-                        "b": "Tv Shows"
-            },
-            {
-                        "a": "Winter",
-                        "b": "Summer"
-            },
-            {
-                        "a": "Sleep in and work late",
-                        "b": "Get up early, get off work early"
-            },
-            {
-                        "a": "Pause Time",
-                        "b": "Rewind Time"
-            },
-            {
-                        "a": "Camping",
-                        "b": "Hotel"
-            },
-            {
-                        "a": "Dogs",
-                        "b": "Cats"
-            },
-            {
-                        "a": "Music",
-                        "b": "Podcasts"
-            },
-            {
-                        "a": "Swimming pool",
-                        "b": "Ocean"
-            },
-            {
-                        "a": "Fiction",
-                        "b": "Non-fiction"
-            },
-            {
-                        "a": "Coke",
-                        "b": "Pepsi"
-            },
-            {
-                        "a": "iOS",
-                        "b": "Android"
-            },
-            {
-                        "a": "Learn an instrument",
-                        "b": "Learn a Language"
-            },
-            {
-                        "a": "Win the lottery",
-                        "b": "Find your dream job"
-            },
-            {
-                        "a": "Travel all over the world",
-                        "b": "Travel ONCE to the moon"
-            },
-            {
-                        "a": "Know how you're going to die",
-                        "b": "Know when you're going to die"
-            },
-            {
-                        "a": "Subtitles On",
-                        "b": "Subtitles Off"
-            },
-            {
-                        "a": "Lose your phone",
-                        "b": "Lose your keys"
-            },
-            {
-                        "a": "Cake",
-                        "b": "Pie"
-            },
-            {
-                        "a": "Funny Halloween costume",
-                        "b": "Scary Halloween costume"
-            },
-            {
-                        "a": "Vacation",
-                        "b": "Staycation"
-            },
-            {
-                        "a": "Always tell the truth",
-                        "b": "Never speak again"
-            },
-            {
-                        "a": "Time machine",
-                        "b": "Teleportation device"
-            },
-            {
-                        "a": "US Bank",
-                        "b": "Launch"
-            }
-];
+            { "a": "Movies", "b": "Tv Shows" },
+            { "a": "Winter", "b": "Summer" },
+            { "a": "Sleep in and work late", "b": "Get up early, get off work early" },
+            { "a": "Pause Time", "b": "Rewind Time" },
+            { "a": "Camping", "b": "Hotel" },
+            { "a": "Dogs", "b": "Cats" },
+            { "a": "Music", "b": "Podcasts" },
+            { "a": "Swimming pool", "b": "Ocean" },
+            { "a": "Fiction", "b": "Non-fiction" },
+            { "a": "Coke", "b": "Pepsi" },
+            { "a": "iOS", "b": "Android" },
+            { "a": "Learn an instrument", "b": "Learn a Language" },
+            { "a": "Win the lottery", "b": "Find your dream job" },
+            { "a": "Travel all over the world", "b": "Travel ONCE to the moon" },
+            { "a": "Know how you're going to die", "b": "Know when you're going to die" },
+            { "a": "Subtitles On", "b": "Subtitles Off" },
+            { "a": "Lose your phone", "b": "Lose your keys" },
+            { "a": "Cake", "b": "Pie" },
+            { "a": "Funny Halloween costume", "b": "Scary Halloween costume" },
+            { "a": "Vacation", "b": "Staycation" },
+            { "a": "Always tell the truth", "b": "Never speak again" },
+            { "a": "Time machine", "b": "Teleportation device" },
+            { "a": "US Bank", "b": "Launch" }
+        ];
 
         // -------------------------------------------------------------------
         // 3. APPLICATION STATE
@@ -198,11 +135,6 @@
             document.getElementById('game-screen').classList.remove('hidden');
             document.getElementById('role-badge').innerText = "Moderator View";
             document.getElementById('mod-controls').classList.remove('hidden');
-
-            db.ref('gameState').set({
-                currentIndex: 0,
-                revealed: false
-            });
 
             listenToGameState();
         }
@@ -294,7 +226,7 @@
                     <p class="text-xs text-slate-400 mt-2">${total} vote(s) cast so far</p>
                 `;
             } else {
-                // REVEALED MODE (Shows Names & Badges)
+                // REVEALED MODE
                 const renderNames = (names, bgClass) => {
                     if (names.length === 0) return '<p class="text-xs text-slate-400 italic">No votes yet</p>';
                     return names.map(n => `<span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${bgClass} text-white">${n}</span>`).join(' ');
@@ -355,6 +287,22 @@
 
         function toggleReveal() {
             db.ref('gameState/revealed').set(!isRevealed);
+        }
+
+        // -------------------------------------------------------------------
+        // 8. MODERATOR RESET FUNCTION
+        // -------------------------------------------------------------------
+        function resetGame() {
+            if (!confirm("Are you sure you want to reset the entire game? This will clear all votes and jump back to Question 1.")) return;
+
+            // 1. Reset game state back to question 0 and unreveal
+            db.ref('gameState').set({
+                currentIndex: 0,
+                revealed: false
+            });
+
+            // 2. Wipe the entire 'votes' tree in Firebase
+            db.ref('votes').remove();
         }
     </script>
 </body>
