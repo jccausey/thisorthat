@@ -123,9 +123,7 @@
 
         // Listen for question updates
         db.ref('questions').on('value', (snapshot) => {
-            console.log("Firebase 'questions' updated:", snapshot.val());
             QUESTIONS = snapshot.val() || [];
-            console.log("QUESTIONS array updated:", QUESTIONS);
             renderUI(); // Re-render when questions change
         });
 
