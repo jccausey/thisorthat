@@ -66,8 +66,13 @@
             </div>
             
             <!-- Reset Button -->
-            <button onclick="resetGame()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition text-sm">
+            <button onclick="resetGame()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition text-sm mb-4">
                 Reset Game (Clear All Votes)
+            </button>
+            
+            <!-- Manage Questions Button -->
+            <button onclick="showAdminScreen()" class="w-full py-2 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-lg transition text-sm">
+                Manage Questions
             </button>
 
             <!-- QR Code Section for Audience Join -->
@@ -76,6 +81,20 @@
                 <div id="qrcode" class="p-2 bg-white rounded-xl shadow-md"></div>
                 <p id="app-url-display" class="text-xs text-slate-500 mt-2 break-all"></p>
             </div>
+        </div>
+    </div>
+
+    <!-- 4. Admin Management Screen -->
+    <div id="admin-screen" class="max-w-xl w-full bg-slate-800 p-6 rounded-2xl shadow-xl hidden text-center">
+        <h2 class="text-2xl font-bold mb-6 text-indigo-400">Manage Questions</h2>
+        <div id="admin-questions-list" class="space-y-4 mb-6 text-left">
+            <!-- Questions rendered here -->
+        </div>
+        <div class="border-t border-slate-700 pt-4">
+            <input id="new-q-a" type="text" placeholder="Option A" class="w-full mb-2 px-3 py-2 bg-slate-700 rounded-lg">
+            <input id="new-q-b" type="text" placeholder="Option B" class="w-full mb-4 px-3 py-2 bg-slate-700 rounded-lg">
+            <button onclick="addQuestion()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg">Add Question</button>
+            <button onclick="hideAdminScreen()" class="w-full mt-4 py-2 bg-slate-700 hover:bg-slate-600 font-bold rounded-lg">Back to Game</button>
         </div>
     </div>
 
@@ -92,6 +111,7 @@
         var activeQuestionIndex = 0;
         var isRevealed = false;
         var currentVotes = {};
+        var QUESTIONS = []; // Changed to empty array initially
 
         // Initialize Firebase using the external config.js file
         if (typeof firebaseConfig !== 'undefined') {
@@ -101,34 +121,11 @@
         }
         const db = firebase.database();
 
-        // -------------------------------------------------------------------
-        // 2. QUESTION LIST
-        // -------------------------------------------------------------------
-        const QUESTIONS = [
-            { "a": "Movies", "b": "Tv Shows" },
-            { "a": "Winter", "b": "Summer" },
-            { "a": "Sleep in and work late", "b": "Get up early, get off work early" },
-            { "a": "Pause Time", "b": "Rewind Time" },
-            { "a": "Camping", "b": "Hotel" },
-            { "a": "Dogs", "b": "Cats" },
-            { "a": "Music", "b": "Podcasts" },
-            { "a": "Swimming pool", "b": "Ocean" },
-            { "a": "Fiction", "b": "Non-fiction" },
-            { "a": "Coke", "b": "Pepsi" },
-            { "a": "iOS", "b": "Android" },
-            { "a": "Learn an instrument", "b": "Learn a Language" },
-            { "a": "Win the lottery", "b": "Find your dream job" },
-            { "a": "Travel all over the world", "b": "Travel ONCE to the moon" },
-            { "a": "Know how you're going to die", "b": "Know when you're going to die" },
-            { "a": "Subtitles On", "b": "Subtitles Off" },
-            { "a": "Lose your phone", "b": "Lose your keys" },
-            { "a": "Cake", "b": "Pie" },
-            { "a": "Funny Halloween costume", "b": "Scary Halloween costume" },
-            { "a": "Vacation", "b": "Staycation" },
-            { "a": "Always tell the truth", "b": "Never speak again" },
-            { "a": "Time machine", "b": "Teleportation device" },
-            { "a": "US Bank", "b": "Launch" }
-        ];
+        // Listen for question updates
+        db.ref('questions').on('value', (snapshot) => {
+            QUESTIONS = snapshot.val() || [];
+            renderUI(); // Re-render when questions change
+        });
 
         // -------------------------------------------------------------------
         // 3. SETUP FLOWS
@@ -327,6 +324,52 @@
             });
 
             db.ref('votes').remove();
+        }
+        // -------------------------------------------------------------------
+        // 8. ADMIN FUNCTIONS
+        // -------------------------------------------------------------------
+        function showAdminScreen() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('admin-screen').classList.remove('hidden');
+            renderAdminUI();
+        }
+
+        function hideAdminScreen() {
+            document.getElementById('admin-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+        }
+
+        function addQuestion() {
+            const a = document.getElementById('new-q-a').value.trim();
+            const b = document.getElementById('new-q-b').value.trim();
+            if (!a || !b) return;
+
+            QUESTIONS.push({ a, b });
+            db.ref('questions').set(QUESTIONS);
+
+            document.getElementById('new-q-a').value = '';
+            document.getElementById('new-q-b').value = '';
+            renderAdminUI();
+        }
+
+        function deleteQuestion(index) {
+            QUESTIONS.splice(index, 1);
+            db.ref('questions').set(QUESTIONS);
+            renderAdminUI();
+        }
+
+        function renderAdminUI() {
+            const list = document.getElementById('admin-questions-list');
+            list.innerHTML = '';
+            QUESTIONS.forEach((q, i) => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-slate-700 p-3 rounded-lg";
+                div.innerHTML = `
+                    <span>${q.a} / ${q.b}</span>
+                    <button onclick="deleteQuestion(${i})" class="text-rose-400 hover:text-rose-300">Delete</button>
+                `;
+                list.appendChild(div);
+            });
         }
     </script>
 </body>
