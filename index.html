@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This or That Live (With Names & Reset)</title>
+    <title>This or That Live (With Names, Reset & QR Code)</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase App & Realtime Database SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
@@ -56,39 +58,41 @@
         </div>
 
         <!-- Moderator Controls (Only visible to Moderator) -->
-        <div id="mod-controls" class="hidden border-t border-slate-700 pt-6 mt-6 space-y-3">
+        <div id="mod-controls" class="hidden border-t border-slate-700 pt-6 mt-6 space-y-4">
             <div class="flex justify-between gap-4">
                 <button id="prev-btn" onclick="changeQuestion(-1)" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold">Previous</button>
                 <button id="reveal-btn" onclick="toggleReveal()" class="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-lg">Reveal Results</button>
                 <button id="next-btn" onclick="changeQuestion(1)" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold">Next</button>
             </div>
+            
             <!-- Reset Button -->
             <button onclick="resetGame()" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition text-sm">
                 Reset Game (Clear All Votes)
             </button>
+
+            <!-- QR Code Section for Audience Join -->
+            <div class="pt-4 border-t border-slate-700/60 flex flex-col items-center">
+                <p class="text-xs text-slate-400 font-semibold mb-2">Scan to Join as Participant:</p>
+                <div id="qrcode" class="p-2 bg-white rounded-xl shadow-md"></div>
+                <p id="app-url-display" class="text-xs text-slate-500 mt-2 break-all"></p>
+            </div>
         </div>
     </div>
 
-    <script>
-        // -------------------------------------------------------------------
-        // 1. FIREBASE CONFIGURATION (Replace with your credentials)
-        // -------------------------------------------------------------------
-        const firebaseConfig = {
-            apiKey: "AIzaSyDfKjxmmy6NLAApbS9VCdrgrvbQBTPFVTI",
-            authDomain: "thisorthat-b4ec4.firebaseapp.com",
-            databaseURL: "https://thisorthat-b4ec4-default-rtdb.firebaseio.com",
-            projectId: "thisorthat-b4ec4",
-            storageBucket: "thisorthat-b4ec4.firebasestorage.app",
-            messagingSenderId: "872710535957",
-            appId: "1:872710535957:web:3d7d27d1dc652336b7871c",
-            measurementId: "G-ZGH9415L17"
-        };
+    <!-- Separate config file import to prevent overwriting credentials on update -->
+    <script src="config.js"></script>
 
-        firebase.initializeApp(firebaseConfig);
+    <script>
+        // Initialize Firebase using the external config.js file
+        if (typeof firebaseConfig !== 'undefined') {
+            firebase.initializeApp(firebaseConfig);
+        } else {
+            console.warn("firebaseConfig is missing. Ensure config.js exists.");
+        }
         const db = firebase.database();
 
         // -------------------------------------------------------------------
-        // 2. QUESTION LIST
+        // QUESTION LIST
         // -------------------------------------------------------------------
         const QUESTIONS = [
             { "a": "Movies", "b": "Tv Shows" },
@@ -117,7 +121,7 @@
         ];
 
         // -------------------------------------------------------------------
-        // 3. APPLICATION STATE
+        // APPLICATION STATE
         // -------------------------------------------------------------------
         let isModerator = false;
         let userId = 'user_' + Math.random().toString(36).substr(2, 9);
@@ -127,7 +131,7 @@
         let currentVotes = {};
 
         // -------------------------------------------------------------------
-        // 4. SETUP FLOWS
+        // SETUP FLOWS
         // -------------------------------------------------------------------
         function initModerator() {
             isModerator = true;
@@ -135,6 +139,9 @@
             document.getElementById('game-screen').classList.remove('hidden');
             document.getElementById('role-badge').innerText = "Moderator View";
             document.getElementById('mod-controls').classList.remove('hidden');
+
+            // Generate QR Code dynamically using current page URL
+            generateQRCode();
 
             listenToGameState();
         }
@@ -157,7 +164,29 @@
         }
 
         // -------------------------------------------------------------------
-        // 5. REALTIME LISTENERS
+        // QR CODE GENERATOR
+        // -------------------------------------------------------------------
+        function generateQRCode() {
+            const qrContainer = document.getElementById("qrcode");
+            qrContainer.innerHTML = ""; // Clear existing
+
+            // Get current URL
+            const currentUrl = window.location.href;
+            document.getElementById("app-url-display").innerText = currentUrl;
+
+            // Render QR Code
+            new QRCode(qrContainer, {
+                text: currentUrl,
+                width: 128,
+                height: 128,
+                colorDark: "#0f172a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // REALTIME LISTENERS
         // -------------------------------------------------------------------
         function listenToGameState() {
             db.ref('gameState').on('value', (snapshot) => {
@@ -181,7 +210,7 @@
         }
 
         // -------------------------------------------------------------------
-        // 6. UI RENDER LOGIC
+        // UI RENDER LOGIC
         // -------------------------------------------------------------------
         function renderUI() {
             const q = QUESTIONS[activeQuestionIndex];
@@ -265,7 +294,7 @@
         }
 
         // -------------------------------------------------------------------
-        // 7. USER ACTIONS
+        // USER ACTIONS
         // -------------------------------------------------------------------
         function castVote(option) {
             if (isRevealed) return;
@@ -289,19 +318,14 @@
             db.ref('gameState/revealed').set(!isRevealed);
         }
 
-        // -------------------------------------------------------------------
-        // 8. MODERATOR RESET FUNCTION
-        // -------------------------------------------------------------------
         function resetGame() {
             if (!confirm("Are you sure you want to reset the entire game? This will clear all votes and jump back to Question 1.")) return;
 
-            // 1. Reset game state back to question 0 and unreveal
             db.ref('gameState').set({
                 currentIndex: 0,
                 revealed: false
             });
 
-            // 2. Wipe the entire 'votes' tree in Firebase
             db.ref('votes').remove();
         }
     </script>
