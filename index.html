@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>This or That Live</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase App & Realtime Database SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Role Selection / Setup Screen -->
+    <div id="setup-screen" class="max-w-md w-full bg-slate-800 p-6 rounded-2xl shadow-xl text-center">
+        <h1 class="text-3xl font-extrabold text-indigo-400 mb-6">This or That Live</h1>
+        <p class="text-slate-300 mb-6">Choose how you want to join this session:</p>
+        <div class="space-y-4">
+            <button onclick="initModerator()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition">
+                Host / Moderator View
+            </button>
+            <button onclick="initParticipant()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold transition">
+                Voter / Audience View
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Game Screen (Hidden initially) -->
+    <div id="game-screen" class="max-w-xl w-full bg-slate-800 p-6 rounded-2xl shadow-xl hidden text-center">
+        <!-- Header / Role Badge -->
+        <div class="flex justify-between items-center mb-6">
+            <span id="role-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300"></span>
+            <span id="question-tracker" class="text-slate-400 text-sm font-semibold"></span>
+        </div>
+
+        <!-- Question Title -->
+        <h2 id="question-text" class="text-2xl font-bold mb-6">Loading question...</h2>
+
+        <!-- Voting Options / Results Display -->
+        <div id="options-container" class="space-y-4 mb-6">
+            <!-- Buttons or Progress bars will render here dynamically -->
+        </div>
+
+        <!-- Moderator Controls (Only visible to Moderator) -->
+        <div id="mod-controls" class="hidden border-t border-slate-700 pt-6 mt-6 flex justify-between gap-4">
+            <button id="prev-btn" onclick="changeQuestion(-1)" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold">Previous</button>
+            <button id="reveal-btn" onclick="toggleReveal()" class="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold rounded-lg">Reveal Results</button>
+            <button id="next-btn" onclick="changeQuestion(1)" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-semibold">Next</button>
+        </div>
+    </div>
+
+    <script>
+        // -------------------------------------------------------------------
+        // 1. FIREBASE CONFIGURATION (Replace with your Firebase credentials)
+        // -------------------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyDfKjxmmy6NLAApbS9VCdrgrvbQBTPFVTI",
+            authDomain: "thisorthat-b4ec4.firebaseapp.com",
+            databaseURL: "https://thisorthat-b4ec4-default-rtdb.firebaseio.com",
+            projectId: "thisorthat-b4ec4",
+            storageBucket: "thisorthat-b4ec4.firebasestorage.app",
+            messagingSenderId: "872710535957",
+            appId: "1:872710535957:web:3d7d27d1dc652336b7871c",
+            measurementId: "G-ZGH9415L17"
+        };
+
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // -------------------------------------------------------------------
+        // 2. QUESTION LIST
+        // -------------------------------------------------------------------
+        const QUESTIONS = [
+            { a: "Movies", b: "TV Shows" },
+            { a: "Winter", b: "Summer" },
+            { a: "Sleep in & work late", b: "Get up early & off work early" },
+            { a: "Credit Card Points", b: "Cash Back" },
+            { a: "$1,000,000 Right Now", b: "$10,000 / month for life" },
+            { a: "Always tell the truth", b: "Never speak again" },
+            { a: "US Bank", b: "Launch" }
+        ];
+
+        // -------------------------------------------------------------------
+        // 3. APPLICATION STATE
+        // -------------------------------------------------------------------
+        let isModerator = false;
+        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        let activeQuestionIndex = 0;
+        let isRevealed = false;
+        let currentVotes = {};
+
+        // -------------------------------------------------------------------
+        // 4. INITIALIZATION
+        // -------------------------------------------------------------------
+        function initModerator() {
+            isModerator = true;
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('role-badge').innerText = "Moderator View";
+            document.getElementById('mod-controls').classList.remove('hidden');
+
+            // Reset game state on launch if needed
+            db.ref('gameState').set({
+                currentIndex: 0,
+                revealed: false
+            });
+
+            listenToGameState();
+        }
+
+        function initParticipant() {
+            isModerator = false;
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('role-badge').innerText = "Participant View";
+
+            listenToGameState();
+        }
+
+        // -------------------------------------------------------------------
+        // 5. REALTIME LISTENERS
+        // -------------------------------------------------------------------
+        function listenToGameState() {
+            // Listen to current question & reveal status
+            db.ref('gameState').on('value', (snapshot) => {
+                const data = snapshot.val() || { currentIndex: 0, revealed: false };
+                activeQuestionIndex = data.currentIndex;
+                isRevealed = data.revealed;
+
+                if (isModerator) {
+                    document.getElementById('reveal-btn').innerText = isRevealed ? "Hide Results" : "Reveal Results";
+                }
+
+                // Listen to votes for the current question
+                listenToVotes(activeQuestionIndex);
+            });
+        }
+
+        function listenToVotes(qIndex) {
+            db.ref(`votes/q_${qIndex}`).on('value', (snapshot) => {
+                currentVotes = snapshot.val() || {};
+                renderUI();
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // 6. UI RENDER LOGIC
+        // -------------------------------------------------------------------
+        function renderUI() {
+            const q = QUESTIONS[activeQuestionIndex];
+            document.getElementById('question-tracker').innerText = `Question ${activeQuestionIndex + 1} of ${QUESTIONS.length}`;
+            document.getElementById('question-text').innerText = `${q.a} OR ${q.b}?`;
+
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            // Calculate vote counts
+            let countA = 0;
+            let countB = 0;
+            let userVote = null;
+
+            Object.entries(currentVotes).forEach(([uid, vote]) => {
+                if (vote === 'A') countA++;
+                if (vote === 'B') countB++;
+                if (uid === userId) userVote = vote;
+            });
+
+            const total = countA + countB;
+            const pctA = total === 0 ? 0 : Math.round((countA / total) * 100);
+            const pctB = total === 0 ? 0 : Math.round((countB / total) * 100);
+
+            if (!isRevealed) {
+                // VOTING MODE (Buttons)
+                container.innerHTML = `
+                    <button onclick="castVote('A')" class="w-full py-4 px-6 rounded-xl font-bold text-lg border-2 transition ${
+                        userVote === 'A' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-700 border-transparent text-slate-200 hover:bg-slate-650'
+                    }">
+                        ${q.a} ${userVote === 'A' ? '✓' : ''}
+                    </button>
+                    <button onclick="castVote('B')" class="w-full py-4 px-6 rounded-xl font-bold text-lg border-2 transition ${
+                        userVote === 'B' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-700 border-transparent text-slate-200 hover:bg-slate-650'
+                    }">
+                        ${q.b} ${userVote === 'B' ? '✓' : ''}
+                    </button>
+                    <p class="text-xs text-slate-400 mt-2">${total} vote(s) cast so far</p>
+                `;
+            } else {
+                // REVEALED MODE (Results Bar)
+                container.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="bg-slate-700 rounded-xl p-4 text-left">
+                            <div class="flex justify-between mb-1 font-semibold">
+                                <span>${q.a}</span>
+                                <span>${pctA}% (${countA})</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden">
+                                <div class="bg-indigo-500 h-4 rounded-full transition-all duration-500" style="width: ${pctA}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-700 rounded-xl p-4 text-left">
+                            <div class="flex justify-between mb-1 font-semibold">
+                                <span>${q.b}</span>
+                                <span>${pctB}% (${countB})</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden">
+                                <div class="bg-emerald-500 h-4 rounded-full transition-all duration-500" style="width: ${pctB}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // 7. USER ACTIONS
+        // -------------------------------------------------------------------
+        function castVote(option) {
+            if (isRevealed) return; // Prevent voting after reveal
+            db.ref(`votes/q_${activeQuestionIndex}/${userId}`).set(option);
+        }
+
+        function changeQuestion(delta) {
+            const nextIdx = activeQuestionIndex + delta;
+            if (nextIdx >= 0 && nextIdx < QUESTIONS.length) {
+                db.ref('gameState').set({
+                    currentIndex: nextIdx,
+                    revealed: false
+                });
+            }
+        }
+
+        function toggleReveal() {
+            db.ref('gameState/revealed').set(!isRevealed);
+        }
+    </script>
+</body>
+</html>
