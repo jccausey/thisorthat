@@ -211,6 +211,14 @@
         // -------------------------------------------------------------------
         function renderUI() {
             const q = QUESTIONS[activeQuestionIndex];
+            
+            // Safety check: if questions are not loaded or index is invalid
+            if (!q) {
+                document.getElementById('question-text').innerText = "Loading question...";
+                document.getElementById('options-container').innerHTML = '';
+                return;
+            }
+
             document.getElementById('question-tracker').innerText = `Question ${activeQuestionIndex + 1} of ${QUESTIONS.length}`;
             document.getElementById('question-text').innerText = `${q.a} OR ${q.b}?`;
 
