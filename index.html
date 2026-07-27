@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This or That Live</title>
+    <title>This or That Live (With Names)</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase App & Realtime Database SDKs -->
@@ -12,7 +12,7 @@
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
-    <!-- Role Selection / Setup Screen -->
+    <!-- 1. Role Selection Screen -->
     <div id="setup-screen" class="max-w-md w-full bg-slate-800 p-6 rounded-2xl shadow-xl text-center">
         <h1 class="text-3xl font-extrabold text-indigo-400 mb-6">This or That Live</h1>
         <p class="text-slate-300 mb-6">Choose how you want to join this session:</p>
@@ -20,13 +20,26 @@
             <button onclick="initModerator()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition">
                 Host / Moderator View
             </button>
-            <button onclick="initParticipant()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold transition">
+            <button onclick="showNameScreen()" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold transition">
                 Voter / Audience View
             </button>
         </div>
     </div>
 
-    <!-- Active Game Screen (Hidden initially) -->
+    <!-- 2. Name Entry Screen (Voters Only) -->
+    <div id="name-screen" class="max-w-md w-full bg-slate-800 p-6 rounded-2xl shadow-xl hidden text-center">
+        <h2 class="text-2xl font-bold mb-4 text-emerald-400">Enter Your Name</h2>
+        <p class="text-slate-300 text-sm mb-6">Your name will be visible next to your choice when results are revealed!</p>
+        <form onsubmit="submitName(event)" class="space-y-4">
+            <input id="user-name-input" type="text" placeholder="e.g., Alex" required maxlength="20"
+                class="w-full px-4 py-3 rounded-xl bg-slate-700 text-white border border-slate-600 focus:outline-none focus:border-emerald-500 text-center text-lg font-semibold" />
+            <button type="submit" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold transition">
+                Join Game
+            </button>
+        </form>
+    </div>
+
+    <!-- 3. Active Game Screen -->
     <div id="game-screen" class="max-w-xl w-full bg-slate-800 p-6 rounded-2xl shadow-xl hidden text-center">
         <!-- Header / Role Badge -->
         <div class="flex justify-between items-center mb-6">
@@ -39,7 +52,7 @@
 
         <!-- Voting Options / Results Display -->
         <div id="options-container" class="space-y-4 mb-6">
-            <!-- Buttons or Progress bars will render here dynamically -->
+            <!-- Dynamic Buttons / Results Render Here -->
         </div>
 
         <!-- Moderator Controls (Only visible to Moderator) -->
@@ -52,7 +65,7 @@
 
     <script>
         // -------------------------------------------------------------------
-        // 1. FIREBASE CONFIGURATION (Replace with your Firebase credentials)
+        // 1. FIREBASE CONFIGURATION (Replace with your credentials)
         // -------------------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyDfKjxmmy6NLAApbS9VCdrgrvbQBTPFVTI",
@@ -65,8 +78,6 @@
             measurementId: "G-ZGH9415L17"
         };
 
-
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -88,12 +99,13 @@
         // -------------------------------------------------------------------
         let isModerator = false;
         let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        let userName = '';
         let activeQuestionIndex = 0;
         let isRevealed = false;
         let currentVotes = {};
 
         // -------------------------------------------------------------------
-        // 4. INITIALIZATION
+        // 4. SETUP FLOWS
         // -------------------------------------------------------------------
         function initModerator() {
             isModerator = true;
@@ -102,7 +114,6 @@
             document.getElementById('role-badge').innerText = "Moderator View";
             document.getElementById('mod-controls').classList.remove('hidden');
 
-            // Reset game state on launch if needed
             db.ref('gameState').set({
                 currentIndex: 0,
                 revealed: false
@@ -111,11 +122,19 @@
             listenToGameState();
         }
 
-        function initParticipant() {
-            isModerator = false;
+        function showNameScreen() {
             document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('name-screen').classList.remove('hidden');
+        }
+
+        function submitName(event) {
+            event.preventDefault();
+            const input = document.getElementById('user-name-input');
+            userName = input.value.trim() || 'Anonymous';
+            
+            document.getElementById('name-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
-            document.getElementById('role-badge').innerText = "Participant View";
+            document.getElementById('role-badge').innerText = `Voter: ${userName}`;
 
             listenToGameState();
         }
@@ -124,7 +143,6 @@
         // 5. REALTIME LISTENERS
         // -------------------------------------------------------------------
         function listenToGameState() {
-            // Listen to current question & reveal status
             db.ref('gameState').on('value', (snapshot) => {
                 const data = snapshot.val() || { currentIndex: 0, revealed: false };
                 activeQuestionIndex = data.currentIndex;
@@ -134,7 +152,6 @@
                     document.getElementById('reveal-btn').innerText = isRevealed ? "Hide Results" : "Reveal Results";
                 }
 
-                // Listen to votes for the current question
                 listenToVotes(activeQuestionIndex);
             });
         }
@@ -157,23 +174,27 @@
             const container = document.getElementById('options-container');
             container.innerHTML = '';
 
-            // Calculate vote counts
-            let countA = 0;
-            let countB = 0;
+            let namesA = [];
+            let namesB = [];
             let userVote = null;
 
-            Object.entries(currentVotes).forEach(([uid, vote]) => {
-                if (vote === 'A') countA++;
-                if (vote === 'B') countB++;
-                if (uid === userId) userVote = vote;
+            Object.entries(currentVotes).forEach(([uid, voteObj]) => {
+                const choice = voteObj.choice;
+                const name = voteObj.name || 'Anonymous';
+
+                if (choice === 'A') namesA.push(name);
+                if (choice === 'B') namesB.push(name);
+                if (uid === userId) userVote = choice;
             });
 
+            const countA = namesA.length;
+            const countB = namesB.length;
             const total = countA + countB;
             const pctA = total === 0 ? 0 : Math.round((countA / total) * 100);
             const pctB = total === 0 ? 0 : Math.round((countB / total) * 100);
 
             if (!isRevealed) {
-                // VOTING MODE (Buttons)
+                // VOTING MODE
                 container.innerHTML = `
                     <button onclick="castVote('A')" class="w-full py-4 px-6 rounded-xl font-bold text-lg border-2 transition ${
                         userVote === 'A' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-700 border-transparent text-slate-200 hover:bg-slate-650'
@@ -188,7 +209,12 @@
                     <p class="text-xs text-slate-400 mt-2">${total} vote(s) cast so far</p>
                 `;
             } else {
-                // REVEALED MODE (Results Bar)
+                // REVEALED MODE (Shows Names & Badges)
+                const renderNames = (names, bgClass) => {
+                    if (names.length === 0) return '<p class="text-xs text-slate-400 italic">No votes yet</p>';
+                    return names.map(n => `<span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${bgClass} text-white">${n}</span>`).join(' ');
+                };
+
                 container.innerHTML = `
                     <div class="space-y-4">
                         <div class="bg-slate-700 rounded-xl p-4 text-left">
@@ -196,8 +222,11 @@
                                 <span>${q.a}</span>
                                 <span>${pctA}% (${countA})</span>
                             </div>
-                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden">
-                                <div class="bg-indigo-500 h-4 rounded-full transition-all duration-500" style="width: ${pctA}%"></div>
+                            <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden mb-3">
+                                <div class="bg-indigo-500 h-3 rounded-full transition-all duration-500" style="width: ${pctA}%"></div>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-slate-650">
+                                ${renderNames(namesA, 'bg-indigo-600')}
                             </div>
                         </div>
 
@@ -206,8 +235,11 @@
                                 <span>${q.b}</span>
                                 <span>${pctB}% (${countB})</span>
                             </div>
-                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden">
-                                <div class="bg-emerald-500 h-4 rounded-full transition-all duration-500" style="width: ${pctB}%"></div>
+                            <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden mb-3">
+                                <div class="bg-emerald-500 h-3 rounded-full transition-all duration-500" style="width: ${pctB}%"></div>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-slate-650">
+                                ${renderNames(namesB, 'bg-emerald-600')}
                             </div>
                         </div>
                     </div>
@@ -219,8 +251,11 @@
         // 7. USER ACTIONS
         // -------------------------------------------------------------------
         function castVote(option) {
-            if (isRevealed) return; // Prevent voting after reveal
-            db.ref(`votes/q_${activeQuestionIndex}/${userId}`).set(option);
+            if (isRevealed) return;
+            db.ref(`votes/q_${activeQuestionIndex}/${userId}`).set({
+                choice: option,
+                name: userName
+            });
         }
 
         function changeQuestion(delta) {
